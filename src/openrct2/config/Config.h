@@ -152,6 +152,7 @@ namespace OpenRCT2::Config
         bool windowButtonsOnTheLeft;
         bool enlargedUi;
         bool touchEnhancements;
+        bool touchPlaceOnRelease;
     };
 
     struct Sound

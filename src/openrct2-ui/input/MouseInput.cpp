@@ -66,6 +66,15 @@ namespace OpenRCT2
 
     static std::optional<uint32_t> _clickRepeatTicks;
 
+    // Set when a touch interaction has positioned a tool but not yet committed it.
+    // Only ever set when Config::interface.touchPlaceOnRelease is enabled AND the
+    // input originated from a touchscreen; a mouse can never set this.
+    static bool _touchToolArmed = false;
+    static ScreenCoordsXY _touchToolArmPos = {};
+
+    // How far a finger must travel before an armed tool is treated as a drag rather than a tap.
+    static constexpr int32_t kTouchDragThreshold = 5;
+
     static MouseState GameGetNextInput(ScreenCoordsXY& screenCoords);
     static void InputWidgetOver(const ScreenCoordsXY& screenCoords, WindowBase* w, WidgetIndex widgetIndex);
     static void InputWidgetOverChangeCheck(WindowClass windowClass, WindowNumber windowNumber, WidgetIndex widgetIndex);
@@ -132,6 +141,15 @@ namespace OpenRCT2
             ProcessMouseOver(screenCoords);
             ProcessMouseTool(screenCoords);
         }
+    }
+
+    static bool ShouldDeferToolCommit()
+    {
+        if (!Config::Get().interface.touchPlaceOnRelease)
+            return false;
+
+        const CursorState* cursorState = ContextGetCursorState();
+        return cursorState != nullptr && cursorState->touch;
     }
 
     /**
@@ -290,6 +308,7 @@ namespace OpenRCT2
         switch (_inputState)
         {
             case InputState::reset:
+                _touchToolArmed = false;
                 WindowTooltipReset(screenCoords);
                 [[fallthrough]];
             case InputState::normal:
@@ -402,6 +421,26 @@ namespace OpenRCT2
                             break;
                         }
 
+                        if (_touchToolArmed)
+                        {
+                            // Several tools set up drag state in onToolDown that onToolDrag then relies on
+                            // (Land's blocked flag, Scenery's wall drag origin, PatrolArea's set/unset mode,
+                            // Footpath's drag-area start, Ride's scenery collect mode, ViewClipping's
+                            // selection start, and the plugin tool API's OnDown/OnDrag contract). A drag must
+                            // therefore never begin while the tool is still armed.
+                            //
+                            // Once the finger has travelled far enough to count as a drag, commit at the
+                            // original press position, restoring the usual onToolDown -> onToolDrag order.
+                            // Below that threshold this is still potentially a tap, so suppress onToolDrag —
+                            // otherwise merely holding a finger still would build. See #17101.
+                            const auto delta = screenCoords - _touchToolArmPos;
+                            if (std::abs(delta.x) < kTouchDragThreshold && std::abs(delta.y) < kTouchDragThreshold)
+                                break;
+
+                            w->onToolDown(gCurrentToolWidget.widgetIndex, _touchToolArmPos);
+                            _touchToolArmed = false;
+                        }
+
                         w->onToolDrag(gCurrentToolWidget.widgetIndex, screenCoords);
                         break;
                     case MouseState::leftRelease:
@@ -414,6 +453,11 @@ namespace OpenRCT2
                                     gCurrentToolWidget.windowClassification, gCurrentToolWidget.windowNumber);
                                 if (w != nullptr)
                                 {
+                                    if (_touchToolArmed)
+                                    {
+                                        w->onToolDown(gCurrentToolWidget.widgetIndex, screenCoords);
+                                        _touchToolArmed = false;
+                                    }
                                     w->onToolUp(gCurrentToolWidget.widgetIndex, screenCoords);
                                 }
                             }
@@ -1088,7 +1132,18 @@ namespace OpenRCT2
                     if (w != nullptr)
                     {
                         gInputFlags.set(InputFlag::leftMousePressed);
-                        w->onToolDown(gCurrentToolWidget.widgetIndex, screenCoords);
+                        if (ShouldDeferToolCommit())
+                        {
+                            // Touch: move the ghost to the touched tile and arm the tool. The commit happens
+                            // on release, or as soon as the finger travels far enough to be a drag. See #17101.
+                            _touchToolArmed = true;
+                            _touchToolArmPos = screenCoords;
+                            w->onToolUpdate(gCurrentToolWidget.widgetIndex, screenCoords);
+                        }
+                        else
+                        {
+                            w->onToolDown(gCurrentToolWidget.widgetIndex, screenCoords);
+                        }
                     }
                 }
                 break;
@@ -1230,7 +1285,10 @@ namespace OpenRCT2
             WindowBase* w = windowMgr->FindByNumber(gCurrentToolWidget.windowClassification, gCurrentToolWidget.windowNumber);
 
             if (w == nullptr)
+            {
+                _touchToolArmed = false;
                 ToolCancel();
+            }
             else if (InputGetState() != InputState::viewportRight)
                 w->onToolUpdate(gCurrentToolWidget.widgetIndex, screenCoords);
         }

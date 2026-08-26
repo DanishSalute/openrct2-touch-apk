@@ -47,12 +47,15 @@ static constexpr bool kWindowButtonsOnTheLeftDefault = false;
 #endif
 #ifdef __ANDROID__
 static constexpr bool kEnlargedUiDefault = true;
+// On touchscreens, committing a tool on touch-down means a single tap builds. See #17101.
+static constexpr bool kTouchPlaceOnReleaseDefault = true;
 // Android phones can come with rounded screen corners, making corner buttons harder to access.
 static constexpr bool kToolbarButtonsCentredDefault = true;
 // Android platform code returns a more appropiate default than SDL.
 static constexpr bool kInferDisplayDPIDefault = false;
 #else
 static constexpr bool kEnlargedUiDefault = false;
+static constexpr bool kTouchPlaceOnReleaseDefault = false;
 static constexpr bool kToolbarButtonsCentredDefault = false;
 static constexpr bool kInferDisplayDPIDefault = true;
 #endif
@@ -408,6 +411,7 @@ namespace OpenRCT2::Config
             model->windowButtonsOnTheLeft = reader->GetBoolean("window_buttons_on_the_left", kWindowButtonsOnTheLeftDefault);
             model->enlargedUi = reader->GetBoolean("enlarged_ui", kEnlargedUiDefault);
             model->touchEnhancements = reader->GetBoolean("touch_enhancements", kEnlargedUiDefault);
+            model->touchPlaceOnRelease = reader->GetBoolean("touch_place_on_release", kTouchPlaceOnReleaseDefault);
         }
     }
 
@@ -435,6 +439,7 @@ namespace OpenRCT2::Config
         writer->WriteBoolean("window_buttons_on_the_left", model->windowButtonsOnTheLeft);
         writer->WriteBoolean("enlarged_ui", model->enlargedUi);
         writer->WriteBoolean("touch_enhancements", model->touchEnhancements);
+        writer->WriteBoolean("touch_place_on_release", model->touchPlaceOnRelease);
     }
 
     static void ReadSound(IIniReader* reader)

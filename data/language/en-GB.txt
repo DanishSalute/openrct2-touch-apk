@@ -3839,3 +3839,5 @@ STR_7039    :Ride type
 STR_7040    :Footpath additions
 STR_7041    :Park info panel
 STR_7042    :Date info panel
+STR_7043    :Place on touch release
+STR_7044    :When using a touchscreen, tapping the map positions the item without building it. Tap again to confirm.

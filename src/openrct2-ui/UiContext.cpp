@@ -492,6 +492,11 @@ public:
                     ScreenCoordsXY fingerPos = { static_cast<int32_t>(e.tfinger.x * _width),
                                                  static_cast<int32_t>(e.tfinger.y * _height) };
 
+                    // Unlike a mouse, a finger produces no motion events before it touches down.
+                    // Without this, ProcessMouseTool() keeps previewing the tool ghost at the
+                    // previous touch location while the tool commits at the new one. See #17101.
+                    _cursorState.position = fingerPos;
+
                     _cursorState.touchIsDouble
                         = (!_cursorState.touchIsDouble
                            && e.tfinger.timestamp - _cursorState.touchDownTimestamp < kTouchDoubleTimeout);
